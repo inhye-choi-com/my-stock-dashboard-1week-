@@ -45,7 +45,6 @@ def load_portfolio_from_sheets(url, sheet_name="보유현황"):
         else:
             csv_url = url
         
-        # 💡 개선: 구글 요청 시에도 봇 차단 방지 헤더 추가 및 타임아웃 단축
         response = requests.get(f"{csv_url}&t={int(datetime.now().timestamp())}", headers=BASE_HEADERS, timeout=5)
         if response.status_code == 200:
             df = pd.read_csv(io.StringIO(response.text))
@@ -56,7 +55,6 @@ def load_portfolio_from_sheets(url, sheet_name="보유현황"):
             return df
         return pd.DataFrame()
     except Exception as e:
-        # 화면이 먹통이 되지 않도록 에러 로깅만 수행
         return pd.DataFrame()
 
 @st.cache_data(ttl=600)  # 10분 캐시로 네이버 차단 우회
@@ -82,7 +80,8 @@ def fetch_market_data(sosok_code):
         
         actual_len_v = min(len(df_v), len(stocks))
         df_v = df_v.head(actual_len_v).copy()
-        df_v['코드'] = [s['코드'] for s in stocks[:actual_len_v]]
+        df_v['code'] = [s['코드'] for s in stocks[:actual_len_v]]  # 내부 연동용 영문 컬럼 유지
+        df_v['코드'] = df_v['code']
         df_v['raw_val'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
         df_v['거래대금(억)'] = (df_v['raw_val'] / 1000).round(1)
         
@@ -106,13 +105,13 @@ def fetch_market_data(sosok_code):
         
         actual_len_g = min(len(df_g), len(stocks_g))
         df_g = df_g.head(actual_len_g).copy()
-        df_g['코드'] = [s['코드'] for s in stocks_g[:actual_len_g]]
+        df_g['code'] = [s['코드'] for s in stocks_g[:actual_len_g]]
+        df_g['코드'] = df_g['code']
         df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
         df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
         
         return df_v, df_g
     except Exception as e:
-        # 네이버 크롤링 실패 시 빈 데이터프레임을 주어 메인 화면은 띄우도록 유도
         st.warning(f"⚠️ 실시간 네이버 금융 데이터 수집에 일시적 지연이 발생했습니다.")
         return pd.DataFrame(columns=['종목명', '등락률', '거래대금(억)', '코드']), pd.DataFrame(columns=['종목명', '등락률', '거래량(만)', '코드'])
 
@@ -141,4 +140,26 @@ def get_all_stock_codes():
             pass
     return mapping
 
-def get_stock_chart
+# 🔥 [문법 오류 수정 완료] 괄호와 인자값 정상 배치
+def get_stock_chart(code, name, period_choice, market_type):
+    suffix = ".KS" if "코스피" in str(market_type) else ".KQ"
+    full_code = f"{code}{suffix}"
+    try:
+        ticker = yf.Ticker(full_code)
+        if period_choice == "3개월 (일봉)":
+            period_val, interval_val = "3mo", "1d"
+        elif period_choice == "1년 (주봉)":
+            period_val, interval_val = "1y", "1wk"
+        else:
+            period_val, interval_val = "3y", "1wk"
+            
+        df = ticker.history(period=period_val, interval=interval_val)
+        
+        if not df.empty:
+            df['MA5'] = df['Close'].rolling(window=5).mean()
+            df['MA20'] = df['Close'].rolling(window=20).mean()
+            df['MA60'] = df['Close'].rolling(window=60).mean()
+            
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_width=[0.25, 0.75])
+            fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="주가", increasing_line_color='#ef4444', decreasing_line_color='#3b82f6'), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=df['MA5'], line=dict(color='#ff9800', width=1.5), name='5선'), row=1, col=1)
