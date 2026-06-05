@@ -1,7 +1,6 @@
-beautifulsoup4
-pandas
-requests
-lxml
-streamlit-autorefresh
-yfinance
-plotly
+beautifulsoup4==4.12.3
+pandas==2.2.2
+requests==2.32.3
+streamlit-autorefresh==1.0.1
+yfinance==0.2.40
+plotly==5.22.0
