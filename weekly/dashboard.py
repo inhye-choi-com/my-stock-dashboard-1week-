@@ -14,16 +14,6 @@ HDR = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.
 G_URL = "https://docs.google.com/spreadsheets/d/1pMpXBZh3sIDE79e7vNmUgdVEU8f-qbywYy7biuWoUNM/edit?usp=sharing"
 W_URL = "https://script.google.com/macros/s/AKfycbw0EcgCR_myrhrtZbtDn1d3Jq11p__mqQCOnoqZ3fO6-G5juC-x3XdWuyDtdWULfwJ6/exec"
 
-st.markdown("""
-<style>
-    .up-color { color: #ef4444; font-weight: bold; } .down-color { color: #3b82f6; font-weight: bold; } 
-    .flat-color { color: #6b7280; } .recommend-row { background-color: #fef08a !important; font-weight: bold; }
-    .super-recommend-row { background-color: #fee2e2 !important; border: 2px solid #ef4444 !important; font-weight: bold; color: #b91c1c !important; }
-    .portfolio-danger { background-color: #fee2e2 !important; color: #b91c1c !important; font-weight: bold; } 
-    .portfolio-success { background-color: #dcfce7 !important; color: #15803d !important; font-weight: bold; } 
-</style>
-""", unsafe_allow_html=True)
-
 def load_portfolio_from_sheets(url, sheet_name="보유현황"):
     try:
         if "/edit" in url:
@@ -152,56 +142,4 @@ def get_stock_chart(code, name, period_choice, market_type):
                 m_colors.append('#3b82f6')
                 
         fig.add_trace(go.Bar(x=df.index, y=df['Volume'], name="거래량", marker_color=m_colors), row=2, col=1)
-        fig.update_layout(xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=10, b=10), height=400, template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.error(f"차트 에러: {e}")
-
-def parse_rate(val):
-    try:
-        return float(str(val).replace('%','').replace('+','').strip())
-    except:
-        return 0.0
-
-st.title("📈 주간 투자 추천 & 스마트 포트폴리오 대시보드")
-st.caption(f"📅 기준일: {datetime.now().strftime('%Y-%m-%d')} | 수급 및 모멘텀 실시간 추적")
-
-sheet_df = load_portfolio_from_sheets(G_URL)
-code_master = get_all_stock_codes()
-
-st.markdown("---")
-tab_buy, tab_sell = st.tabs(["➕ 새 추천 주식 매수 추가", "➖ 주식 매도 기록"])
-
-with tab_buy:
-    with st.form("add_form", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns(4)
-        n = c1.text_input("종목명", placeholder="예: 삼성전자")
-        p = c2.number_input("매수가(원)", min_value=0, step=10)
-        q = c3.number_input("보유주수(주)", min_value=1, step=1, value=1)
-        m = c4.selectbox("시장", ["코스피", "코스닥"])
-        if st.form_submit_button("💼 포트폴리오 추가") and n.strip() and p > 0:
-            try:
-                requests.post(W_URL, json={"action": "buy", "stock_name": n.strip(), "buy_price": int(p), "qty": int(q), "market": m}, timeout=10)
-                st.success("🎉 추가 완료!"); st.cache_data.clear(); st.rerun()
-            except Exception as e: st.error(f"오류: {e}")
-
-with tab_sell:
-    with st.form("sell_form", clear_on_submit=True):
-        s1, s2, s3 = st.columns(3)
-        stks = sheet_df['종목명'].dropna().unique().tolist() if not sheet_df.empty and '종목명' in sheet_df.columns else []
-        sn = s1.selectbox("매도 종목 선택", stks if stks else ["보유 주식 없음"])
-        hq = int(pd.to_numeric(sheet_df[sheet_df['종목명'] == sn].iloc[0]['보유주수'], errors='coerce')) if sn in stks else 0
-        sp = s2.number_input("매도가(원)", min_value=0, step=10)
-        sq = s3.number_input(f"매도 주수 (최대 {hq}주)", min_value=1, max_value=max(1, hq), step=1)
-        if st.form_submit_button("🚨 청산 실행") and sn != "보유 주식 없음" and sp > 0:
-            bp = int(pd.to_numeric(sheet_df[sheet_df['종목명'] == sn].iloc[0]['매수가'], errors='coerce'))
-            try:
-                requests.post(W_URL, json={"action": "sell", "stock_name": sn, "buy_price": bp, "sell_price": int(sp), "qty": int(sq), "profit": int((sp-bp)*sq), "date": datetime.now().strftime("%Y-%m-%d %H:%M")}, timeout=10)
-                st.success("🎉 매도 완료!"); st.cache_data.clear(); st.rerun()
-            except Exception as e: st.error(f"오류: {e}")
-
-st.subheader("📋 내 주간 포트폴리오 현황")
-my_stock_list = []
-
-if not sheet_df.empty and "종목명" in sheet_df.columns:
-    html = "<table style='width:100%; border-collapse
+        fig.update_layout(xaxis_rangeslider_visible=False, margin=dict(l=10,
