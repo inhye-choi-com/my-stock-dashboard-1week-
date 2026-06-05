@@ -46,12 +46,12 @@ def load_portfolio_from_sheets(url, sheet_name="보유현황"):
     except:
         return pd.DataFrame()
 
-# 주간(5영업일) 급등주 및 수급주 포착을 위한 데이터 수집 함수
-@st.cache_data(ttl=600)  # 주간 매매이므로 10분(600초) 단위로 캐싱하여 속도 최적화
+# 주간(5영업일) 급등주 및 수급주 포착을 위한 데이터 수집 함수 (오류 수정 완료)
+@st.cache_data(ttl=600)
 def fetch_weekly_market_data(sosok_code):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     
-    # 1. 거래대금 상위는 기존 수급 중심 유지
+    # 1. 거래대금 상위 수집
     url_v = f"https://finance.naver.com/sise/sise_quant.naver?sosok={sosok_code}"
     res_v = requests.get(url_v, headers=headers, timeout=10)
     soup_v = BeautifulSoup(res_v.text, 'html.parser')
@@ -68,7 +68,7 @@ def fetch_weekly_market_data(sosok_code):
     df_v['raw_val'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
     df_v['거래대금(억)'] = (df_v['raw_val'] / 1000).round(1)
 
-    # 2. 당일 급등이 아닌 [주간 상승률 상위] 추출 로직으로 전면 교체
+    # 2. 주간 상승률 상위 (기존 컬럼명 매핑 오류 전면 수정)
     url_w = f"https://finance.naver.com/sise/sise_low_up.naver?sosok={sosok_code}"
     res_w = requests.get(url_w, headers=headers, timeout=10)
     soup_w = BeautifulSoup(res_w.text, 'html.parser')
@@ -82,6 +82,11 @@ def fetch_weekly_market_data(sosok_code):
     df_w = pd.read_html(io.StringIO(str(table_w)))[0].dropna(subset=['종목명'])
     df_w = df_w[df_w['종목명'] != '종목명'].head(10).copy()
     df_w['코드'] = [s['코드'] for s in stocks_w[:len(df_w)]]
+    
+    # 오류 방지: 컬럼 이름을 안전한 순서(index) 기반으로 접근하여 추출합니다.
+    # 네이버 시세 테이블 컬럼 순서: [N, 종목명, 현재가, 전일비, 등락률, 거래량, 거래대금, ...]
+    df_w.columns = [f"col_{i}" for i in range(len(df_w.columns))]
+    df_w = df_w.rename(columns={"col_1": "종목명", "col_2": "현재가", "col_4": "주간등락률"})
     
     return df_v, df_w
 
@@ -138,7 +143,7 @@ def parse_rate(val_str):
     except: return 0.0
 
 # UI 렌더링
-st_autorefresh(interval=300000, key="datarefresh") # 스윙 투자이므로 5분 단위 자동 새로고침 설정
+st_autorefresh(interval=300000, key="datarefresh") 
 
 st.title("📈 주간 스윙 매매 시스템 & 포트폴리오 패널")
 st.caption(f"📅 조회 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 🔄 주간 트렌드 분석 모드")
@@ -219,75 +224,3 @@ my_stock_list = []
 
 if not sheet_df.empty and "종목명" in sheet_df.columns:
     p_html = "<table style='width:100%; border-collapse:collapse; text-align:left;'>"
-    p_html += "<tr style='border-bottom:2px solid #333; background-color:#f3f4f6; height:35px;'><th>종목명</th><th>매수가</th><th>보유주수</th><th>현재가</th><th>평가수익</th><th>수익률</th><th>매매 신호</th></tr>"
-    for _, row in sheet_df.iterrows():
-        if pd.isna(row['종목명']) or str(row['종목명']).strip() == "": continue
-        name = str(row['종목명']).strip()
-        buy_price = pd.to_numeric(row['매수가'], errors='coerce')
-        qty = pd.to_numeric(row['보유주수'], errors='coerce') if '보유주수' in sheet_df.columns else 1
-        m_type = str(row['시장']).strip() if '시장' in sheet_df.columns else "코스피"
-        
-        if name in code_master and not pd.isna(buy_price):
-            code = code_master[name]
-            current_price = get_current_price(code, m_type)
-            my_stock_list.append(name)
-            if current_price:
-                profit_rate = round(((current_price - buy_price) / buy_price) * 100, 2)
-                total_profit = int((current_price - buy_price) * qty)
-                # 스윙 투자에 맞추어 손절선 -5%, 익절선 +10%로 러프하게 마진 확장 조정
-                row_style = "class='portfolio-danger'" if profit_rate <= -5.0 else ("class='portfolio-success'" if profit_rate >= 10.0 else "")
-                signal = "🚨 [위험] 주간 손절선 -5% 이탈" if profit_rate <= -5.0 else ("🎉 [목표 달성] 스윙 익절 +10%!" if profit_rate >= 10.0 else "➖ 추세 보유")
-                rate_html = f"<span class='up-color'>+{profit_rate}%</span>" if profit_rate > 0 else (f"<span class='down-color'>{profit_rate}%</span>" if profit_rate < 0 else "<span>0.0%</span>")
-                profit_html = f"<span class='up-color'>{total_profit:,}원</span>" if total_profit > 0 else (f"<span class='down-color'>{total_profit:,}원</span>" if total_profit < 0 else "<span>0원</span>")
-                p_html += f"<tr {row_style} style='border-bottom:1px solid #ddd; height:40px;'><td><b>{name}</b></td><td>{int(buy_price):,}원</td><td>{int(qty):,}주</td><td>{current_price:,}원</td><td>{profit_html}</td><td>{rate_html}</td><td><b>{signal}</b></td></tr>"
-    p_html += "</table>"
-    st.markdown(p_html, unsafe_allow_html=True)
-else:
-    st.info("💡 보유 중인 주식이 없습니다. 상단의 폼에서 새로운 주식을 추가해 보세요.")
-
-# ----------------- 하단 시장 데이터 및 주간 주도주 분석 -----------------
-st.markdown("---")
-market_tab = st.radio("📈 시장 선택", ["코스피 (KOSPI)", "코스닥 (KOSDAQ)"], horizontal=True)
-sosok_code = 0 if market_tab == "코스피 (KOSPI)" else 1
-
-try:
-    df_v, df_w = fetch_weekly_market_data(sosok_code)
-    
-    def build_custom_html_table(df, table_type):
-        html = "<table style='width:100%; border-collapse:collapse;'>"
-        if table_type == "value":
-            html += "<tr style='border-bottom:2px solid #ddd; text-align:left;'><th>순위</th><th>종목명</th><th>현재가</th><th>거래대금(억)</th></tr>"
-            for idx, row in df.iterrows():
-                html += f"<tr style='border-bottom:1px solid #eee; height:35px;'><td>{idx+1}</td><td>{row['종목명']}</td><td>{row['현재가']}원</td><td>{row['거래대금(억)']}</td></tr>"
-        else:
-            html += "<tr style='border-bottom:2px solid #ddd; text-align:left;'><th>순위</th><th>종목명</th><th>현재가</th><th>주간 최저비 급등률</th></tr>"
-            for idx, row in df.iterrows():
-                rate_num = parse_rate(row['현재가 대비'])
-                rate_html = f"<span class='up-color'>▲ +{rate_num}%</span>" if rate_num > 0 else "<span class='flat-color'>0.0%</span>"
-                html += f"<tr class='recommend-row' style='border-bottom:1px solid #eee; height:35px;'><td>{idx+1}</td><td>{row['종목명']}</td><td>{row['종목현재가']}원</td><td>{rate_html}</td></tr>"
-        return html + "</table>"
-
-    combined_list = pd.concat([df_v[['종목명', '코드']], df_w[['종목명', '코드']]]).drop_duplicates('종목명')
-    stock_names = combined_list['종목명'].tolist()
-
-    col1, col2, col3 = st.columns([1, 1, 1.6])
-    with col1:
-        st.subheader("💵 대형 수급주 (거래대금 상위)")
-        st.markdown(build_custom_html_table(df_v.reset_index(drop=True), "value"), unsafe_allow_html=True)
-    with col2:
-        st.subheader("🚀 주간 급등주 (최저가 대비 상위)")
-        st.markdown(build_custom_html_table(df_w.reset_index(drop=True), "weekly_up"), unsafe_allow_html=True)
-    with col3:
-        st.subheader("🔍 주식 상세 분석 & 추세 차트")
-        select_options = ["-- 내 보유 주식 선택 --"] + my_stock_list + ["-- 시장 주도주 선택 --"] + stock_names if my_stock_list else stock_names
-        st.selectbox("분석할 종목을 선택하세요", select_options, index=0, key="stock_selector_main")
-        selected_stock_name = st.session_state.stock_selector_main
-        if "--" in str(selected_stock_name): selected_stock_name = stock_names[0]
-            
-        # 기본 차트 주기를 일주일(30분봉)로 변경
-        period_choice = st.radio("차트 주기", ["하루 (1분봉)", "일주일 (30분봉)", "한달 (일봉)"], index=1, horizontal=True, key="chart_period_choice")
-        selected_code = code_master.get(selected_stock_name, "005930")
-        st.markdown(f"### 📊 {selected_stock_name} ({selected_code})")
-        get_stock_chart(selected_code, selected_stock_name, period_choice, market_tab)
-
-except Exception as e: st.error(f"데이터 연동 중 오류 발생: {e}")
