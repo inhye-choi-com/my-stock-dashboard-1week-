@@ -1,0 +1,7 @@
+beautifulsoup4
+pandas
+requests
+lxml
+streamlit-autorefresh
+yfinance
+plotly
