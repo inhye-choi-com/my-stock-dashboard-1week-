@@ -62,4 +62,36 @@ def fetch_market_data(sosok_code):
     rows = table_v.find_all('tr')
     for row in rows:
         anchor = row.find('a', {'class': 'tltle'})
-        if anchor: stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')
+        # 🔥 [문법 오류 수정 완료] 괄호 유실 및 split 처리 보완
+        if anchor: stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
+            
+    df_v = pd.read_html(io.StringIO(str(table_v)))[0].dropna(subset=['종목명'])
+    df_v = df_v[df_v['종목명'] != '종목명'].head(15).copy() # 종목 풀을 조금 더 넓힘
+    actual_len_v = min(len(df_v), len(stocks))
+    df_v = df_v.head(actual_len_v).copy()
+    df_v['코드'] = [s['코드'] for s in stocks[:actual_len_v]]
+    df_v['raw_val'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
+    df_v['거래대금(억)'] = (df_v['raw_val'] / 1000).round(1)
+    
+    # 2. 당기 상승률 상위 종목을 주간 추천 후보군으로 활용
+    url_g = f"https://finance.naver.com/sise/sise_rise.naver?sosok={sosok_code}"
+    res_g = requests.get(url_g, headers=headers, timeout=10)
+    soup_g = BeautifulSoup(res_g.text, 'html.parser')
+    table_g = soup_g.find('table', {'class': 'type_2'})
+    
+    stocks_g = []
+    rows_g = table_g.find_all('tr')
+    for row in rows_g:
+        anchor = row.find('a', {'class': 'tltle'})
+        # 🔥 [문법 오류 수정 완료] 동일한 유실 오류 교정
+        if anchor: stocks_g.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
+            
+    df_g = pd.read_html(io.StringIO(str(table_g)))[0].dropna(subset=['종목명'])
+    df_g = df_g[df_g['종목명'] != '종목명'].head(15).copy()
+    actual_len_g = min(len(df_g), len(stocks_g))
+    df_g = df_g.head(actual_len_g).copy()
+    df_g['코드'] = [s['코드'] for s in stocks_g[:actual_len_g]]
+    df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
+    df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
+    
+    return df_v, df_g
