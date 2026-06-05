@@ -50,7 +50,7 @@ def load_portfolio_from_sheets(url, sheet_name="보유현황"):
             df = pd.read_csv(io.StringIO(response.text))
             if not df.empty:
                 df.columns = [c.strip() for c in df.columns]
-                if '종목명' in df.columns:
+                if '종목名' in df.columns:
                     df = df.dropna(subset=['종목명'])
             return df
         return pd.DataFrame()
@@ -64,20 +64,4 @@ def fetch_market_data(sosok_code):
         url_v = f"https://finance.naver.com/sise/sise_quant.naver?sosok={sosok_code}"
         res_v = requests.get(url_v, headers=BASE_HEADERS, timeout=5)
         soup_v = BeautifulSoup(res_v.text, 'html.parser')
-        table_v = soup_v.find('table', {'class': 'type_2'})
-        
-        stocks = []
-        if table_v:
-            rows = table_v.find_all('tr')
-            for row in rows:
-                anchor = row.find('a', {'class': 'tltle'})
-                if anchor: 
-                    stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
-        
-        # 🔥 [들여쓰기 및 구문 구조 정렬 완료]
-        tables = pd.read_html(io.StringIO(str(table_v)))
-        df_v = tables[0].dropna(subset=['종목명']) if tables else pd.DataFrame()
-        df_v = df_v[df_v['종목명'] != '종목명'].head(15).copy()
-        
-        actual_len_v = min(len(df_v), len(stocks))
-        df
+        table_v = soup_v.find('table', {'
