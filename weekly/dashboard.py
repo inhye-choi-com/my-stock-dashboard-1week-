@@ -77,11 +77,42 @@ def fetch_market_data(sosok_code):
         tables = pd.read_html(io.StringIO(str(table_v)))
         df_v = tables[0].dropna(subset=['종목명']) if tables else pd.DataFrame()
         
-        # 🔥 [오류 수정] 잘려나갔던 '종목명' 문자열 마감 복구 완료
         df_v = df_v[df_v['종목명'] != '종목명'].head(15).copy()
         
         actual_len_v = min(len(df_v), len(stocks))
         df_v = df_v.head(actual_len_v).copy()
         df_v['코드'] = [s['코드'] for s in stocks[:actual_len_v]]
         
-        df_v['raw_val'] = pd.to_numeric(df
+        # 🔥 [오류 수정] 끊겼던 pd.to_numeric 수식 정상 결합 및 마감 완료
+        df_v['raw_val'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
+        df_v['거래대금(억)'] = (df_v['raw_val'] / 1000).round(1)
+        
+        # 2. 상승률 상위 종목
+        url_g = f"https://finance.naver.com/sise/sise_rise.naver?sosok={sosok_code}"
+        res_g = requests.get(url_g, headers=BASE_HEADERS, timeout=5)
+        soup_g = BeautifulSoup(res_g.text, 'html.parser')
+        table_g = soup_g.find('table', {'class': 'type_2'})
+        
+        stocks_g = []
+        if table_g:
+            rows_g = table_g.find_all('tr')
+            for row in rows_g:
+                anchor = row.find('a', {'class': 'tltle'})
+                if anchor: 
+                    stocks_g.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
+                    
+        tables_g = pd.read_html(io.StringIO(str(table_g)))
+        df_g = tables_g[0].dropna(subset=['종목명']) if tables_g else pd.DataFrame()
+        
+        df_g = df_g[df_g['종목명'] != '종목명'].head(15).copy()
+        
+        actual_len_g = min(len(df_g), len(stocks_g))
+        df_g = df_g.head(actual_len_g).copy()
+        df_g['코드'] = [s['코드'] for s in stocks_g[:actual_len_g]]
+        
+        df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
+        df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
+        
+        return df_v, df_g
+    except Exception as e:
+        st.warning(f"⚠️ 실시간 네이버 금융 데이터 수집에 일시적 지연이
