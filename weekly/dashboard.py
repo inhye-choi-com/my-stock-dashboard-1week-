@@ -76,4 +76,12 @@ def fetch_market_data(sosok_code):
         
         tables = pd.read_html(io.StringIO(str(table_v)))
         df_v = tables[0].dropna(subset=['종목명']) if tables else pd.DataFrame()
-        df_v = df_v[df_v['종목명'] != '종목
+        
+        # 🔥 [오류 수정] 잘려나갔던 '종목명' 문자열 마감 복구 완료
+        df_v = df_v[df_v['종목명'] != '종목명'].head(15).copy()
+        
+        actual_len_v = min(len(df_v), len(stocks))
+        df_v = df_v.head(actual_len_v).copy()
+        df_v['코드'] = [s['코드'] for s in stocks[:actual_len_v]]
+        
+        df_v['raw_val'] = pd.to_numeric(df
