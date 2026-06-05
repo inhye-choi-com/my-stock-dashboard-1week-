@@ -60,7 +60,7 @@ def load_portfolio_from_sheets(url, sheet_name="보유현황"):
 @st.cache_data(ttl=600)
 def fetch_market_data(sosok_code):
     try:
-        # 1. 거래대금 상위
+        # 1. 거래대금 상위 수집
         url_v = f"https://finance.naver.com/sise/sise_quant.naver?sosok={sosok_code}"
         res_v = requests.get(url_v, headers=BASE_HEADERS, timeout=5)
         soup_v = BeautifulSoup(res_v.text, 'html.parser')
@@ -70,10 +70,14 @@ def fetch_market_data(sosok_code):
         if table_v:
             rows = table_v.find_all('tr')
             for row in rows:
-                # 🔥 [오류 수정] 잘려나갔던 클래스명 딕셔너리 마감 처리 완벽 복구
                 anchor = row.find('a', {'class': 'tltle'})
                 if anchor: 
                     stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
         
+        # 🔥 [들여쓰기 및 구문 구조 정렬 완료]
         tables = pd.read_html(io.StringIO(str(table_v)))
         df_v = tables[0].dropna(subset=['종목명']) if tables else pd.DataFrame()
+        df_v = df_v[df_v['종목명'] != '종목명'].head(15).copy()
+        
+        actual_len_v = min(len(df_v), len(stocks))
+        df
