@@ -64,14 +64,4 @@ def fetch_market_data(sosok_code):
         url_v = f"https://finance.naver.com/sise/sise_quant.naver?sosok={sosok_code}"
         res_v = requests.get(url_v, headers=BASE_HEADERS, timeout=5)
         soup_v = BeautifulSoup(res_v.text, 'html.parser')
-        table_v = soup_v.find('table', {'class': 'type_2'})
-        
-        stocks = []
-        if table_v:
-            rows = table_v.find_all('tr')
-            for row in rows:
-                anchor = row.find('a', {'class': 'tltle'})
-                if anchor: 
-                    stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
-        
-        tables = pd.read_html(io.StringIO(str(table_v
+        table_v = soup_v.find('table',
