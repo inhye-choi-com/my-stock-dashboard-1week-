@@ -83,7 +83,6 @@ def fetch_market_data(sosok_code):
         df_v = df_v.head(actual_len_v).copy()
         df_v['코드'] = [s['코드'] for s in stocks[:actual_len_v]]
         
-        # 🔥 [오류 수정] 끊겼던 pd.to_numeric 수식 정상 결합 및 마감 완료
         df_v['raw_val'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
         df_v['거래대금(억)'] = (df_v['raw_val'] / 1000).round(1)
         
@@ -99,20 +98,4 @@ def fetch_market_data(sosok_code):
             for row in rows_g:
                 anchor = row.find('a', {'class': 'tltle'})
                 if anchor: 
-                    stocks_g.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
-                    
-        tables_g = pd.read_html(io.StringIO(str(table_g)))
-        df_g = tables_g[0].dropna(subset=['종목명']) if tables_g else pd.DataFrame()
-        
-        df_g = df_g[df_g['종목명'] != '종목명'].head(15).copy()
-        
-        actual_len_g = min(len(df_g), len(stocks_g))
-        df_g = df_g.head(actual_len_g).copy()
-        df_g['코드'] = [s['코드'] for s in stocks_g[:actual_len_g]]
-        
-        df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
-        df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
-        
-        return df_v, df_g
-    except Exception as e:
-        st.warning(f"⚠️ 실시간 네이버 금융 데이터 수집에 일시적 지연이
+                    stocks_g.append({'종목명': anchor.get_text().strip(), '코드
