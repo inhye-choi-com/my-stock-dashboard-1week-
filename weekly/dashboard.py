@@ -26,16 +26,23 @@ st.markdown("""
 
 def load_portfolio_from_sheets(url, sheet_name="보유현황"):
     try:
-        csv_url = f"{url.split('/edit')[0]}/gviz/tq?tqx=out:csv&sheet={sheet_name}" if "/edit" in url else url
-        res = requests.get(f"{csv_url}&t={int(datetime.now().timestamp())}", headers=HDR, timeout=5)
+        if "/edit" in url:
+            base = url.split('/edit')[0]
+            csv_url = f"{base}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+        else:
+            csv_url = url
+        ts = int(datetime.now().timestamp())
+        res = requests.get(f"{csv_url}&t={ts}", headers=HDR, timeout=5)
         if res.status_code == 200:
             df = pd.read_csv(io.StringIO(res.text))
-            if not df.empty and '종목명' in df.columns:
-                df = df.dropna(subset=['종목명'])
-                df.columns = [c.strip() for c in df.columns]
+            if not df.empty:
+                if '종목명' in df.columns:
+                    df = df.dropna(subset=['종목명'])
+                    df.columns = [c.strip() for c in df.columns]
             return df
         return pd.DataFrame()
-    except: return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 @st.cache_data(ttl=600)
 def fetch_market_data(sosok):
@@ -48,32 +55,7 @@ def fetch_market_data(sosok):
         if t_v:
             for r in t_v.find_all('tr'):
                 a = r.find('a', {'class': 'tltle'})
-                if a: stk_v.append({'종목명': a.get_text().strip(), '코드': a['href'].split('=')[-1]})
+                if a:
+                    stk_v.append({'종목명': a.get_text().strip(), '코드': a['href'].split('=')[-1]})
         df_v = pd.read_html(io.StringIO(str(t_v)))[0].dropna(subset=['종목명']) if t_v else pd.DataFrame()
-        df_v = df_v[df_v['종목명'] != '종목명'].head(len(stk_v)).copy()
-        df_v['코드'] = [s['코드'] for s in stk_v[:len(df_v)]]
-        df_v['거래대금(억)'] = (pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0) / 1000).round(1)
-        
-        # 2. 상승률 상위 수집
-        res_g = requests.get(f"https://finance.naver.com/sise/sise_rise.naver?sosok={sosok}", headers=HDR, timeout=5)
-        soup_g = BeautifulSoup(res_g.text, 'html.parser')
-        t_g = soup_g.find('table', {'class': 'type_2'})
-        stk_g = []
-        if t_g:
-            for r in t_g.find_all('tr'):
-                a = r.find('a', {'class': 'tltle'})
-                if a: stk_g.append({'종목명': a.get_text().strip(), '코드': a['href'].split('=')[-1]})
-        df_g = pd.read_html(io.StringIO(str(t_g)))[0].dropna(subset=['종목명']) if t_g else pd.DataFrame()
-        df_g = df_g[df_g['종목명'] != '종목명'].head(len(stk_g)).copy()
-        df_g['코드'] = [s['코드'] for s in stk_g[:len(df_g)]]
-        df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
-        df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
-        
-        return df_v.head(15), df_g.head(15)
-    except:
-        return pd.DataFrame(columns=['종목명', '등락률', '거래대금(억)', '코드']), pd.DataFrame(columns=['종목명', '등락률', '거래량(만)', '코드'])
-
-def get_current_price(code, market):
-    try:
-        df = yf.Ticker(f"{code}{'.KS' if '코스피' in str(market) else '.KQ'}").history(period="1d")
-        if not df.empty: return int
+        df_v = df_v[df_v['종목명'] != '
