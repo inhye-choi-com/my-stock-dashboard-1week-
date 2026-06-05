@@ -70,4 +70,10 @@ def fetch_market_data(sosok_code):
         if table_v:
             rows = table_v.find_all('tr')
             for row in rows:
-                anchor = row.find('a', {'class': 'tltle
+                # 🔥 [오류 수정] 잘려나갔던 클래스명 딕셔너리 마감 처리 완벽 복구
+                anchor = row.find('a', {'class': 'tltle'})
+                if anchor: 
+                    stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
+        
+        tables = pd.read_html(io.StringIO(str(table_v)))
+        df_v = tables[0].dropna(subset=['종목명']) if tables else pd.DataFrame()
