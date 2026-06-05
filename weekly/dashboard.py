@@ -40,7 +40,7 @@ def load_portfolio_from_sheets(url, sheet_name="보유현황"):
 @st.cache_data(ttl=600)
 def fetch_market_data(sosok):
     try:
-        # 1. 거래대금 상위 수집 (가로 라인 압축 해제 및 쪼개기)
+        # 1. 거래대금 상위 수집
         res_v = requests.get(f"https://finance.naver.com/sise/sise_quant.naver?sosok={sosok}", headers=HDR, timeout=5)
         soup_v = BeautifulSoup(res_v.text, 'html.parser')
         t_v = soup_v.find('table', {'class': 'type_2'})
@@ -76,14 +76,4 @@ def fetch_market_data(sosok):
 def get_current_price(code, market):
     try:
         df = yf.Ticker(f"{code}{'.KS' if '코스피' in str(market) else '.KQ'}").history(period="1d")
-        if not df.empty: return int(df['Close'].iloc[-1])
-    except: pass
-    return None
-
-@st.cache_data(ttl=3600)
-def get_all_stock_codes():
-    m = {}
-    for s in [0, 1]:
-        try:
-            soup = BeautifulSoup(requests.get(f"https://finance.naver.com/sise/sise_quant.naver?sosok={s}", headers=HDR, timeout=5).text, 'html.parser')
-            for a in soup.find_all('a', {'class': 'tltle'}): m[a.get_text().strip()] = a
+        if not df.empty: return int
