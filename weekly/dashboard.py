@@ -20,12 +20,14 @@ BASE_HEADERS = {
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1pMpXBZh3sIDE79e7vNmUgdVEU8f-qbywYy7biuWoUNM/edit?usp=sharing"
 GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw0EcgCR_myrhrtZbtDn1d3Jq11p__mqQCOnoqZ3fO6-G5juC-x3XdWuyDtdWULfwJ6/exec"
 
+# CSS 스타일에 '양타점 추천주용 강렬한 빨간색 음영' 추가
 st.markdown("""
 <style>
     .up-color { color: #ef4444; font-weight: bold; }   
     .down-color { color: #3b82f6; font-weight: bold; } 
     .flat-color { color: #6b7280; }                   
     .recommend-row { background-color: #fef08a !important; font-weight: bold; }
+    .super-recommend-row { background-color: #fee2e2 !important; border: 2px solid #ef4444 !important; font-weight: bold; color: #b91c1c !important; }
     .portfolio-danger { background-color: #fee2e2 !important; color: #b91c1c !important; font-weight: bold; } 
     .portfolio-success { background-color: #dcfce7 !important; color: #15803d !important; font-weight: bold; } 
 </style>
@@ -168,168 +170,12 @@ def parse_rate(val_str):
     try: return float(str(val_str).replace('%','').replace('+','').strip())
     except: return 0.0
 
-# UI 시작
+# ----------------- UI 시작 -----------------
 st.title("📈 주간 투자 추천 & 스마트 포트폴리오 대시보드")
 today_str = datetime.now().strftime('%Y-%m-%d')
-st.caption(f"📅 기준일: {today_str} | 수급 분석 패턴 시스템")
+st.caption(f"📅 기준일: {today_str} | 수급 및 모멘텀 실시간 추적 시스템")
 
 sheet_df = load_portfolio_from_sheets(GOOGLE_SHEET_URL, sheet_name="보유현황")
 code_master = get_all_stock_codes()
 
-st.markdown("---")
-tab_buy, tab_sell = st.tabs(["➕ 새 추천 주식 매수 추가", "➖ 주식 매도 기록"])
-
-with tab_buy:
-    with st.form("add_stock_form", clear_on_submit=True):
-        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-        with f_col1: new_name = st.text_input("종목명", placeholder="예: 삼성전자", key="b_name")
-        with f_col2: new_price = st.number_input("매수가(원)", min_value=0, step=10, value=0, key="b_price")
-        with f_col3: new_qty = st.number_input("보유주수(주)", min_value=1, step=1, value=1, key="b_qty")
-        with f_col4: new_market = st.selectbox("시장", ["코스피", "코스닥"], key="b_market")
-        submit_btn = st.form_submit_button("💼 포트폴리오에 추천주 추가")
-        
-        if submit_btn:
-            if new_name.strip() == "" or new_price <= 0: 
-                st.error("❌ 정보를 올바르게 입력해 주세요.")
-            else:
-                with st.spinner("기록 중..."):
-                    payload = {"action": "buy", "stock_name": new_name.strip(), "buy_price": int(new_price), "qty": int(new_qty), "market": new_market}
-                    try:
-                        requests.post(GOOGLE_WEB_APP_URL, json=payload, timeout=10)
-                        st.success("🎉 중기 포트폴리오 편입 완료!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e: st.error(f"실패: {e}")
-
-with tab_sell:
-    with st.form("sell_stock_form", clear_on_submit=True):
-        s_col1, s_col2, s_col3 = st.columns(3)
-        active_stocks = sheet_df['종목명'].dropna().unique().tolist() if not sheet_df.empty and '종목명' in sheet_df.columns else []
-        with s_col1: sell_name = st.selectbox("매도할 종목 선택", active_stocks if active_stocks else ["보유 주식 없음"])
-        
-        max_sell_qty = 1000000
-        current_hold_qty = 0
-        if not sheet_df.empty and '종목명' in sheet_df.columns and sell_name in sheet_df['종목명'].values:
-            matching_row = sheet_df[sheet_df['종목명'] == sell_name].iloc[0]
-            current_hold_qty = int(pd.to_numeric(matching_row['보유주수'], errors='coerce'))
-            max_sell_qty = current_hold_qty if current_hold_qty > 0 else 1000000
-            
-        with s_col2: sell_price = st.number_input("매도가(원)", min_value=0, step=10, value=0)
-        with s_col3: sell_qty = st.number_input(f"매도 주수 (최대 {current_hold_qty}주)", min_value=1, max_value=max_sell_qty, step=1, value=min(1, max_sell_qty))
-        sell_btn = st.form_submit_button("🚨 실현 손익 확정 및 청산")
-        
-        if sell_btn and sell_name != "보유 주식 없음":
-            if sell_price <= 0: st.error("❌ 매도가를 입력하세요.")
-            else:
-                matching = sheet_df[sheet_df['종목명'] == sell_name]
-                if not matching.empty:
-                    buy_price_avg = int(pd.to_numeric(matching.iloc[0]['매수가'], errors='coerce'))
-                    profit_calculated = int((sell_price - buy_price_avg) * int(sell_qty))
-                    with st.spinner("처리 중..."):
-                        payload = {"action": "sell", "stock_name": sell_name, "buy_price": int(buy_price_avg), "sell_price": int(sell_price), "qty": int(sell_qty), "profit": int(profit_calculated), "date": datetime.now().strftime("%Y-%m-%d %H:%M")}
-                        try:
-                            requests.post(GOOGLE_WEB_APP_URL, json=payload, timeout=10)
-                            st.success("🎉 매도 청산 완료!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        except Exception as e: st.error(f"실패: {e}")
-
-st.subheader("📋 내 주간 포트폴리오 현황 (목표가/손절가 감시)")
-my_stock_list = []
-
-if not sheet_df.empty and "종목명" in sheet_df.columns:
-    p_html = "<table style='width:100%; border-collapse:collapse; text-align:left;'>"
-    p_html += "<tr style='border-bottom:2px solid #333; background-color:#f3f4f6; height:35px;'><th>종목명</th><th>평균매수가</th><th>보유량</th><th>현재가</th><th>평가손익</th><th>수익률</th><th>중기 대응 신호</th></tr>"
-    for _, row in sheet_df.iterrows():
-        if pd.isna(row['종목명']) or str(row['종목명']).strip() == "": continue
-        name = str(row['종목명']).strip()
-        buy_price = pd.to_numeric(row['매수가'], errors='coerce')
-        qty = pd.to_numeric(row['보유주수'], errors='coerce') if '보유주수' in sheet_df.columns else 1
-        if pd.isna(qty): qty = 1
-        
-        # 🔥 [완벽 복구 및 다이어트 완료] 에러 나던 괄호 라인을 완전히 마감 및 정리함
-        m_type = str(row['시장']).strip() if '시장' in sheet_df.columns else "코스피"
-        
-        if name in code_master and not pd.isna(buy_price):
-            code = code_master[name]
-            current_price = get_current_price(code, m_type)
-            my_stock_list.append(name)
-            if current_price:
-                profit_rate = round(((current_price - buy_price) / buy_price) * 100, 2)
-                total_profit = int((current_price - buy_price) * qty)
-                row_style = "class='portfolio-danger'" if profit_rate <= -5.0 else ("class='portfolio-success'" if profit_rate >= 12.0 else "")
-                signal = "🚨 리스크 관리 (-5%)" if profit_rate <= -5.0 else ("🎉 목표 달성 (+12%)" if profit_rate >= 12.0 else "➖ 주간 보유")
-                rate_html = f"<span class='up-color'>+{profit_rate}%</span>" if profit_rate > 0 else (f"<span class='down-color'>{profit_rate}%</span>" if profit_rate < 0 else "<span>0.0%</span>")
-                profit_html = f"<span class='up-color'>{total_profit:,}원</span>" if total_profit > 0 else (f"<span class='down-color'>{total_profit:,}원</span>" if total_profit < 0 else "<span>0원</span>")
-                p_html += f"<tr {row_style} style='border-bottom:1px solid #ddd; height:40px;'><td><b>{name}</b></td><td>{int(buy_price):,}원</td><td>{int(qty):,}주</td><td>{current_price:,}원</td><td>{profit_html}</td><td>{rate_html}</td><td><b>{signal}</b></td></tr>"
-    p_html += "</table>"
-    st.markdown(p_html, unsafe_allow_html=True)
-else:
-    st.info("💡 보유 현황 데이터가 비어있습니다.")
-
-st.markdown("---")
-market_tab = st.radio("📈 대상을 선택하세요", ["코스피 주간 후보군", "코스닥 주간 후보군"], horizontal=True)
-sosok_code = 0 if "코스피" in market_tab else 1
-
-try:
-    df_v, df_g = fetch_market_data(sosok_code)
-    recommendations = {}
-    
-    def build_custom_html_table(df, table_type):
-        if df.empty: return "<p style='color:gray;'>데이터가 없습니다.</p>"
-        html = "<table style='width:100%; border-collapse:collapse;'>"
-        html += "<tr style='border-bottom:2px solid #ddd; text-align:left;'><th>순위</th><th>종목명</th><th>등락률</th><th>" + ("거래대금(억)" if table_type=="value" else "거래량(만)") + "</th></tr>"
-        for idx, row in df.iterrows():
-            rate_num = parse_rate(row.get('등락률', '0'))
-            rate_html = f"<span class='up-color'>▲ +{rate_num}%</span>" if rate_num > 0 else (f"<span class='down-color'>▼ {rate_num}%</span>" if rate_num < 0 else "<span class='flat-color'>0.0%</span>")
-            target_val = float(row.get('거래대금(억)', 0)) if table_type == "value" else int(row.get('raw_vol', 0))
-            is_recommended = (table_type == "value" and target_val >= 800 and 2 <= rate_num <= 12) or (table_type == "volume" and target_val >= 1500000 and 4 <= rate_num <= 15)
-            if is_recommended and '종목명' in row: 
-                recommendations[row['종목명']] = "💎 수급 집중 우상향" if table_type=="value" else "🚀 거래량 밀집 바닥권 탈출"
-            row_class = "class='recommend-row'" if is_recommended else ""
-            display_col = row.get('거래대금(억)' if table_type=='value' else '거래량(만)', 0)
-            html += f"<tr {row_class} style='border-bottom:1px solid #eee; height:35px;'><td>{idx+1}</td><td>{row.get('종목명', '-')}</td><td>{rate_html}</td><td>{display_col}</td></tr>"
-        return html + "</table>"
-
-    col1, col2, col3 = st.columns([1, 1, 1.6])
-    with col1:
-        st.subheader("💵 수급 집중")
-        st.markdown(build_custom_html_table(df_v.reset_index(drop=True), "value"), unsafe_allow_html=True)
-    with col2:
-        st.subheader("🔥 추세 전환")
-        st.markdown(build_custom_html_table(df_g.reset_index(drop=True), "volume"), unsafe_allow_html=True)
-    with col3:
-        st.subheader("🔍 주간 추천주 Pick & 분석")
-        if recommendations:
-            st.markdown("##### 💡 시스템 자동 추천:")
-            for r_name, r_reason in list(recommendations.items())[:3]: st.write(f"- **{r_name}**: {r_reason}")
-        else: st.write("기준 충족 종목이 없습니다.")
-        st.markdown("---")
-        
-        stock_names = []
-        if not df_v.empty: stock_names += df_v['종목명'].tolist()
-        if not df_g.empty: stock_names += df_g['종목명'].tolist()
-        stock_names = list(set(stock_names))
-        select_options = ["-- 내 포트폴리오 주식 --"] + my_stock_list + ["-- 시장 추천/분석 후보 --"] + stock_names if my_stock_list else stock_names
-        
-        st.selectbox("종목 선택", select_options if select_options else ["삼성전자"], index=0, key="stock_selector_main")
-        sel_name = st.session_state.stock_selector_main
-        if "--" in str(sel_name): sel_name = "삼성전자" if not stock_names else stock_names[0]
-            
-        if not sheet_df.empty and '종목명' in sheet_df.columns and sel_name in sheet_df['종목명'].values:
-            stock_row = sheet_df[sheet_df['종목명'] == sel_name].iloc[0]
-            b_p = pd.to_numeric(stock_row['매수가'], errors='coerce')
-            s_q = pd.to_numeric(stock_row['보유주수'], errors='coerce')
-            c_p = get_current_price(code_master.get(sel_name, "005930"), stock_row.get('시장', '코스피'))
-            if c_p and not pd.isna(b_p):
-                m_col1, m_col2, m_col3 = st.columns(3)
-                with m_col1: st.metric(label="보유량", value=f"{int(s_q):,} 주")
-                with m_col2: st.metric(label="매수 평단가", value=f"{b_p:,}원")
-                with m_col3: st.metric(label="수익률", value=f"{round(((c_p - b_p)/b_p)*100,2)}%")
-        
-        period_choice = st.radio("차트 주기", ["3개월 (일봉)", "1년 (주봉)", "3년 (주봉)"], horizontal=True, key="chart_period_choice")
-        selected_code = code_master.get(sel_name, "005930")
-        st.markdown(f"### 📊 {sel_name} ({selected_code}) 차트")
-        get_stock_chart(selected_code, sel_name, period_choice, market_tab)
-except Exception as e: 
-    st.error(f"오류: {e}")
+st.markdown
