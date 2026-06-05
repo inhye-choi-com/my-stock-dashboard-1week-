@@ -66,8 +66,6 @@ def fetch_market_data(sosok):
         df_g = pd.read_html(io.StringIO(str(t_g)))[0].dropna(subset=['종목명']) if t_g else pd.DataFrame()
         df_g = df_g.query(f"{target_col} != '종목명'").head(len(stk_g)).copy()
         df_g['코드'] = [s['코드'] for s in stk_g[:len(df_g)]]
-        
-        # 🔥 [69라인 오타 완벽 수정] 대괄호 위치 수정 및 정상 구문으로 교정 완료
         df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
         df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
         
@@ -80,66 +78,4 @@ def get_all_stock_codes():
     m = {}
     for s in [0, 1]:
         try:
-            url = f"https://finance.naver.com/sise/sise_quant.naver?sosok={s}"
-            res = requests.get(url, headers=HDR, timeout=5)
-            soup = BeautifulSoup(res.text, 'html.parser')
-            anchors = soup.find_all('a', {'class': 'tltle'})
-            for a in anchors:
-                name_key = a.get_text().strip()
-                code_val = a['href'].split('=')[-1]
-                m[name_key] = code_val
-        except:
-            pass
-    return m
-
-def get_current_price(code, market):
-    try:
-        suffix = ".KQ"
-        if "코스피" in str(market):
-            suffix = ".KS"
-        full_ticker = f"{code}{suffix}"
-        ticker_obj = yf.Ticker(full_ticker)
-        df = ticker_obj.history(period="1d")
-        if not df.empty:
-            last_close = df['Close'].iloc[-1]
-            return int(last_close)
-    except:
-        pass
-    return None
-
-def get_stock_chart(code, name, period_choice, market_type):
-    try:
-        p_val = "3mo"
-        i_val = "1d"
-        if period_choice == "1년 (주봉)":
-            p_val = "1y"
-            i_val = "1wk"
-        elif period_choice == "3년 (주봉)":
-            p_val = "3y"
-            i_val = "1wk"
-            
-        suffix = ".KQ"
-        if "코스피" in str(market_type):
-            suffix = ".KS"
-            
-        df = yf.Ticker(f"{code}{suffix}").history(period=p_val, interval=i_val)
-        if df.empty:
-            return st.warning("⚠️ 차트 데이터 없음")
-        
-        df['MA5'] = df['Close'].rolling(5).mean()
-        df['MA20'] = df['Close'].rolling(20).mean()
-        df['MA60'] = df['Close'].rolling(60).mean()
-        
-        fig = make_subplots(
-            rows=2, 
-            cols=1, 
-            shared_xaxes=True, 
-            vertical_spacing=0.05, 
-            row_width=[0.25, 0.75]
-        )
-        
-        fig.add_trace(
-            go.Candlestick(
-                x=df.index, 
-                open=df['Open'], 
-                high
+            url = f"
