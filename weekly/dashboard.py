@@ -70,32 +70,4 @@ def fetch_market_data(sosok_code):
         if table_v:
             rows = table_v.find_all('tr')
             for row in rows:
-                anchor = row.find('a', {'class': 'tltle'})
-                if anchor: 
-                    stocks.append({'종목명': anchor.get_text().strip(), '코드': anchor['href'].split('=')[-1]})
-        
-        tables = pd.read_html(io.StringIO(str(table_v)))
-        df_v = tables[0].dropna(subset=['종목명']) if tables else pd.DataFrame()
-        
-        df_v = df_v[df_v['종목명'] != '종목명'].head(15).copy()
-        
-        actual_len_v = min(len(df_v), len(stocks))
-        df_v = df_v.head(actual_len_v).copy()
-        df_v['코드'] = [s['코드'] for s in stocks[:actual_len_v]]
-        
-        df_v['raw_val'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
-        df_v['거래대금(억)'] = (df_v['raw_val'] / 1000).round(1)
-        
-        # 2. 상승률 상위 종목
-        url_g = f"https://finance.naver.com/sise/sise_rise.naver?sosok={sosok_code}"
-        res_g = requests.get(url_g, headers=BASE_HEADERS, timeout=5)
-        soup_g = BeautifulSoup(res_g.text, 'html.parser')
-        table_g = soup_g.find('table', {'class': 'type_2'})
-        
-        stocks_g = []
-        if table_g:
-            rows_g = table_g.find_all('tr')
-            for row in rows_g:
-                anchor = row.find('a', {'class': 'tltle'})
-                if anchor: 
-                    stocks_g.append({'종목명': anchor.get_text().strip(), '코드
+                anchor = row.find('a', {'class': 'tltle
