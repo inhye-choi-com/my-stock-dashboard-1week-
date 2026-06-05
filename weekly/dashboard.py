@@ -57,5 +57,38 @@ def fetch_market_data(sosok):
                 a = r.find('a', {'class': 'tltle'})
                 if a:
                     stk_v.append({'종목명': a.get_text().strip(), '코드': a['href'].split('=')[-1]})
+        
         df_v = pd.read_html(io.StringIO(str(t_v)))[0].dropna(subset=['종목명']) if t_v else pd.DataFrame()
-        df_v = df_v[df_v['종목명'] != '
+        
+        # 🔥 [61라인 에러 수정 및 우회] 한글 필터링 버그를 막기 위해 query문 스타일로 완전 변경
+        target_col = '종목명'
+        df_v = df_v.query(f"{target_col} != '종목명'").head(len(stk_v)).copy()
+        
+        df_v['코드'] = [s['코드'] for s in stk_v[:len(df_v)]]
+        df_v['거래대금(억)'] = (pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0) / 1000).round(1)
+        
+        # 2. 상승률 상위 수집
+        res_g = requests.get(f"https://finance.naver.com/sise/sise_rise.naver?sosok={sosok}", headers=HDR, timeout=5)
+        soup_g = BeautifulSoup(res_g.text, 'html.parser')
+        t_g = soup_g.find('table', {'class': 'type_2'})
+        stk_g = []
+        if t_g:
+            for r in t_g.find_all('tr'):
+                a = r.find('a', {'class': 'tltle'})
+                if a:
+                    stk_g.append({'종목명': a.get_text().strip(), '코드': a['href'].split('=')[-1]})
+                    
+        df_g = pd.read_html(io.StringIO(str(t_g)))[0].dropna(subset=['종목명']) if t_g else pd.DataFrame()
+        
+        # 🔥 [동일 버그 예방] 상승률 쪽 한글 필터링도 안전하게 격리
+        df_g = df_g.query(f"{target_col} != '종목명'").head(len(stk_g)).copy()
+        
+        df_g['코드'] = [s['코드'] for s in stk_g[:len(df_g)]]
+        df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
+        df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
+        
+        return df_v.head(15), df_g.head(15)
+    except:
+        return pd.DataFrame(columns=['종목명', '등락률', '거래대금(억)', '코드']), pd.DataFrame(columns=['종목명', '등락률', '거래량(만)', '코드'])
+
+def get_current
