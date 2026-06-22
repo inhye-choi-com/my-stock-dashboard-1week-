@@ -51,7 +51,10 @@ def fetch_market_data(sosok):
         target_col = '종목명'
         df_v = df_v.query(f"{target_col} != '종목명'").head(len(stk_v)).copy()
         df_v['코드'] = [s['코드'] for s in stk_v[:len(df_v)]]
-        df_v['거래대금(억)'] = (pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0) / 1000).round(1)
+        
+        # 🔥 [장 마감 후 방어 로직] 데이터 타입 강제 변환 및 결측치 0 처리
+        df_v['거래대금'] = pd.to_numeric(df_v['거래대금'], errors='coerce').fillna(0)
+        df_v['거래대금(억)'] = (df_v['거래대금'] / 1000).round(1)
         
         res_g = requests.get(f"https://finance.naver.com/sise/sise_rise.naver?sosok={sosok}", headers=HDR, timeout=5)
         soup_g = BeautifulSoup(res_g.text, 'html.parser')
@@ -66,6 +69,8 @@ def fetch_market_data(sosok):
         df_g = pd.read_html(io.StringIO(str(t_g)))[0].dropna(subset=['종목명']) if t_g else pd.DataFrame()
         df_g = df_g.query(f"{target_col} != '종목명'").head(len(stk_g)).copy()
         df_g['코드'] = [s['코드'] for s in stk_g[:len(df_g)]]
+        
+        # 🔥 [장 마감 후 방어 로직] 거래량 문자열 에러 방지
         df_g['raw_vol'] = pd.to_numeric(df_g['거래량'], errors='coerce').fillna(0)
         df_g['거래량(만)'] = (df_g['raw_vol'] / 10000).round(1)
         
@@ -137,8 +142,6 @@ def get_stock_chart(code, name, period_choice, market_type):
             row_width=[0.25, 0.75]
         )
         
-        # 🔥 [147라인 오류 수정 및 전수 분할 마감] 
-        # 잘림 현상을 막기 위해 인자별로 줄바꿈을 완벽히 적용했습니다.
         c_trace = go.Candlestick(
             x=df.index, 
             open=df['Open'], 
@@ -304,9 +307,11 @@ try:
             
             t_val = float(row.get('거래대금(억)', 0)) if t_type == "val" else int(row.get('raw_vol', 0))
             is_rec = False
-            if t_type == "val" and t_val >= 800 and 2 <= r_num <= 12:
+            
+            # 🔥 [마감 후 필터 보정] 장 마감 후 최종 데이터 안정적 수용을 위한 소폭의 유연성 부여
+            if t_type == "val" and t_val >= 500 and 1.5 <= r_num <= 15:
                 is_rec = True
-            elif t_type == "vol" and t_val >= 1500000 and 4 <= r_num <= 15:
+            elif t_type == "vol" and t_val >= 1000000 and 2.5 <= r_num <= 20:
                 is_rec = True
                 
             if is_rec:
@@ -323,7 +328,6 @@ try:
     with col3:
         st.subheader("🔍 주간 추천주 Pick")
         
-        # 가로 유실 방지를 위한 스타일 변수 쪼개기 정의
         b_bg = "background-color: #fef08a;"
         b_pd = "padding: 12px; border-radius: 6px;"
         b_bd = "border-left: 5px solid #eab308;"
